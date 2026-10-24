@@ -31,6 +31,11 @@
   keys.concat(['landing_page','referrer']).forEach(function(k){
     var h = form.querySelector('[name="' + k + '"]'); if (h) h.value = store[k] || '';
   });
+  // prefill from the fit quiz
+  ['experience','role','capital','timeline'].forEach(function(k){
+    var v = qs.get(k), el = form.querySelector('select[name="' + k + '"]');
+    if (v && el && Array.from(el.options).some(function(o){ return o.value === v || o.text === v; })) el.value = v;
+  });
   var sets = Array.from(form.querySelectorAll('fieldset')), bars = Array.from(document.querySelectorAll('.progress span'));
   var label = document.querySelector('.step-label'), back = form.querySelector('.back'), next = form.querySelector('.next'), submit = form.querySelector('.submit');
   var i = 0, started = false;
@@ -74,4 +79,71 @@
     document.querySelector('.success').classList.add('on');
   });
   show(0);
+})();
+
+(function(){
+  window.dataLayer = window.dataLayer || [];
+  function track(ev, p){ window.dataLayer.push(Object.assign({event: ev}, p || {})); }
+  function validate(scope){
+    var ok = true;
+    scope.querySelectorAll('[required]').forEach(function(f){
+      if (f.type === 'radio') return;
+      var e = scope.querySelector('[data-err="' + f.name + '"]'), good;
+      if (f.type === 'checkbox') good = f.checked;
+      else if (f.type === 'email') good = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.value.trim());
+      else if (f.type === 'tel') good = f.value.replace(/\D/g,'').length >= 10;
+      else good = f.value.trim() !== '';
+      if (e) e.textContent = good ? '' : (f.dataset.msg || 'Required');
+      f.setAttribute('aria-invalid', good ? 'false' : 'true');
+      if (!good) ok = false;
+    });
+    return ok;
+  }
+
+  // fit quiz
+  var quiz = document.getElementById('fitquiz');
+  if (quiz) quiz.addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var names = ['experience','role','capital','timeline','region'], ans = {}, score = 0, missing = 0;
+    names.forEach(function(n){
+      var c = quiz.querySelector('input[name="' + n + '"]:checked');
+      if (!c) { missing++; return; }
+      ans[n] = c.value; ans[n + '_score'] = +c.dataset.score; score += +c.dataset.score;
+    });
+    var err = document.getElementById('quiz-err');
+    if (missing) { err.textContent = 'Please answer all five questions.'; return; }
+    err.textContent = '';
+    var tier = (score >= 12 && ans.capital_score >= 2 && ans.experience_score >= 2) ? 'strong' : (score >= 7 ? 'good' : 'early');
+    track('franchise_fit_quiz_complete', {fit_tier: tier, fit_score: score});
+    document.querySelectorAll('.quiz-apply').forEach(function(a){
+      var u = new URL(a.getAttribute('href'), location.href);
+      ['experience','role','capital','timeline'].forEach(function(k){ u.searchParams.set(k, ans[k]); });
+      a.setAttribute('href', u.pathname.split('/').pop() + u.search);
+    });
+    quiz.hidden = true;
+    var r = document.getElementById('r-' + tier); r.hidden = false;
+    r.scrollIntoView({behavior: 'smooth', block: 'start'});
+  });
+
+  // brochure form
+  var bf = document.getElementById('brochure-form');
+  if (bf) bf.addEventListener('submit', function(ev){
+    ev.preventDefault();
+    if (!validate(bf)) return;
+    track('franchise_brochure_request', {market: bf.querySelector('[name="b_state"]').value});
+    // TODO: post to the approved CRM endpoint, which emails the download link.
+    bf.style.display = 'none';
+    document.getElementById('brochure-ok').classList.add('on');
+  });
+
+  // gallery lightbox
+  var lb = document.querySelector('.lightbox');
+  if (lb && lb.showModal) {
+    var img = lb.querySelector('img'), cap = lb.querySelector('p');
+    document.querySelectorAll('.g-open').forEach(function(b){
+      b.addEventListener('click', function(){ img.src = b.dataset.src; img.alt = b.dataset.cap; cap.textContent = b.dataset.cap; lb.showModal(); });
+    });
+    lb.querySelector('.lb-close').addEventListener('click', function(){ lb.close(); });
+    lb.addEventListener('click', function(e){ if (e.target === lb) lb.close(); });
+  }
 })();
