@@ -6,9 +6,12 @@ window.RBF_SEND = function(form, kind, extra){
   d._subject = (kind === 'brochure' ? 'Franchise brochure request' : 'Franchise inquiry') + (name ? ' — ' + name : '') + (d.market_state || d.b_state ? ' — ' + (d.market_state || d.b_state) : '');
   d._cc = FD.cc.join(','); d._template = 'table'; d._captcha = 'false'; d.form = kind; d.page = location.href;
   var em = d.email || d.b_email; if (em) d._replyto = em;
-  return fetch(FD.endpoint, {method: 'POST', headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}, body: JSON.stringify(d)})
+  var ac = window.AbortController ? new AbortController() : null;
+  var req = fetch(FD.endpoint, {method: 'POST', headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}, body: JSON.stringify(d), signal: ac ? ac.signal : undefined})
     .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ return r.ok && String(j.success) === 'true'; }); })
     .catch(function(){ return false; });
+  var to = new Promise(function(res){ setTimeout(function(){ if (ac) ac.abort(); res(false); }, 10000); });
+  return Promise.race([req, to]);
 };
 window.RBF_FAIL = function(box){
   var p = document.createElement('p'); p.className = 'form-fail'; p.setAttribute('role', 'alert');
@@ -149,9 +152,9 @@ window.RBF_FAIL = function(box){
     ev.preventDefault();
     if (!validate(bf)) return;
     track('franchise_brochure_request', {market: bf.querySelector('[name="b_state"]').value});
-    var sb = bf.querySelector('[type=submit]'); if (sb) sb.disabled = true;
+    var sb = bf.querySelector('[type=submit]'); if (sb) { sb.disabled = true; sb.setAttribute('aria-busy', 'true'); sb.textContent = 'Sending…'; }
     window.RBF_SEND(bf, 'brochure').then(function(ok){
-      if (sb) sb.disabled = false;
+      if (sb) { sb.disabled = false; sb.removeAttribute('aria-busy'); sb.textContent = 'Get the brochure'; }
       if (!ok) { window.RBF_FAIL(document.getElementById('brochure-ok')); }
       bf.style.display = 'none'; document.getElementById('brochure-ok').classList.add('on');
     });
