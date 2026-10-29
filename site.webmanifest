@@ -1,0 +1,27 @@
+{
+ "name": "Renegade Burrito Franchising",
+ "short_name": "RB Franchise",
+ "start_url": "./",
+ "scope": "./",
+ "display": "browser",
+ "background_color": "#0d0d0c",
+ "theme_color": "#0d0d0c",
+ "icons": [
+  {
+   "src": "img/icons/icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "img/icons/icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png"
+  },
+  {
+   "src": "img/icons/icon-maskable-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ]
+}

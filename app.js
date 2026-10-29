@@ -1,3 +1,20 @@
+window.RBF_SEND = function(form, kind, extra){
+  var FD = {endpoint: "https://formsubmit.co/ajax/bharris@renegadeburrito.com", cc: ["tharris@renegadeburrito.com", "goqueencitydigital@gmail.com"]};
+  var d = Object.fromEntries(new FormData(form).entries());
+  Object.assign(d, window.RBF_ATTR || {}, extra || {});
+  var name = ((d.first_name || d.b_first || '') + ' ' + (d.last_name || d.b_last || '')).trim();
+  d._subject = (kind === 'brochure' ? 'Franchise brochure request' : 'Franchise inquiry') + (name ? ' — ' + name : '') + (d.market_state || d.b_state ? ' — ' + (d.market_state || d.b_state) : '');
+  d._cc = FD.cc.join(','); d._template = 'table'; d._captcha = 'false'; d.form = kind; d.page = location.href;
+  var em = d.email || d.b_email; if (em) d._replyto = em;
+  return fetch(FD.endpoint, {method: 'POST', headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}, body: JSON.stringify(d)})
+    .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ return r.ok && String(j.success) === 'true'; }); })
+    .catch(function(){ return false; });
+};
+window.RBF_FAIL = function(box){
+  var p = document.createElement('p'); p.className = 'form-fail'; p.setAttribute('role', 'alert');
+  p.innerHTML = 'We couldn\'t send that just now. Please email <a href="mailto:bharris@renegadeburrito.com?cc=tharris@renegadeburrito.com,goqueencitydigital@gmail.com&subject=Franchise%20inquiry">bharris@renegadeburrito.com</a> or call <a href="tel:+17202189261">(720) 218-9261</a>.';
+  box.prepend(p);
+};
 (function(){
   window.dataLayer = window.dataLayer || [];
   function track(ev, params){ window.dataLayer.push(Object.assign({event: ev}, params || {})); }
@@ -10,16 +27,14 @@
 
   // UTM + click-id capture (persist for the session so it survives page changes)
   var keys = ['utm_source','utm_medium','utm_campaign','utm_content','utm_term','gclid','fbclid'];
-  // Attribution is carried between pages on the query string (no browser storage).
+  // Attribution: first touch is kept in sessionStorage for this visit; internal links stay clean.
   var qs = new URLSearchParams(location.search), store = {};
-  keys.concat(['landing_page','referrer']).forEach(function(k){ if (qs.get(k)) store[k] = qs.get(k); });
+  try { store = JSON.parse(sessionStorage.getItem('rbf_attr') || '{}'); } catch (e) { store = {}; }
+  keys.forEach(function(k){ if (qs.get(k) && !store[k]) store[k] = qs.get(k); });
   if (!store.landing_page) store.landing_page = location.pathname;
   if (!store.referrer) store.referrer = document.referrer || '(direct)';
-  var carry = new URLSearchParams();
-  Object.keys(store).forEach(function(k){ carry.set(k, store[k]); });
-  document.querySelectorAll('a[href$=".html"]').forEach(function(a){
-    a.setAttribute('href', a.getAttribute('href').split('?')[0] + '?' + carry.toString());
-  });
+  try { sessionStorage.setItem('rbf_attr', JSON.stringify(store)); } catch (e) {}
+  window.RBF_ATTR = store;
   // CTA tracking
   document.querySelectorAll('[data-cta]').forEach(function(a){
     a.addEventListener('click', function(){ track('franchise_cta_click', {cta_label: a.dataset.cta, page: location.pathname}); });
@@ -29,7 +44,7 @@
   var form = document.getElementById('inquiry');
   if (!form) return;
   keys.concat(['landing_page','referrer']).forEach(function(k){
-    var h = form.querySelector('[name="' + k + '"]'); if (h) h.value = store[k] || '';
+    var h = form.querySelector('[name="' + k + '"]'); if (h) h.value = (window.RBF_ATTR || {})[k] || '';
   });
   // prefill from the fit quiz
   ['experience','role','capital','timeline'].forEach(function(k){
@@ -74,9 +89,12 @@
     var d = Object.fromEntries(new FormData(form).entries());
     d.consent_timestamp = new Date().toISOString();
     track('franchise_inquiry_submit', {market: d.market_state || '', utm_source: d.utm_source || ''});
-    // TODO: post to the approved CRM endpoint.
-    form.style.display = 'none';
-    document.querySelector('.success').classList.add('on');
+    var sb = form.querySelector('.submit'); if (sb) { sb.disabled = true; sb.textContent = 'Sending…'; }
+    window.RBF_SEND(form, 'inquiry', {consent_timestamp: d.consent_timestamp}).then(function(ok){
+      if (sb) { sb.disabled = false; sb.textContent = 'Submit Inquiry'; }
+      if (!ok) { window.RBF_FAIL(form); return; }
+      form.style.display = 'none'; document.querySelector('.success').classList.add('on');
+    });
   });
   show(0);
 })();
@@ -131,9 +149,12 @@
     ev.preventDefault();
     if (!validate(bf)) return;
     track('franchise_brochure_request', {market: bf.querySelector('[name="b_state"]').value});
-    // TODO: post to the approved CRM endpoint, which emails the download link.
-    bf.style.display = 'none';
-    document.getElementById('brochure-ok').classList.add('on');
+    var sb = bf.querySelector('[type=submit]'); if (sb) sb.disabled = true;
+    window.RBF_SEND(bf, 'brochure').then(function(ok){
+      if (sb) sb.disabled = false;
+      if (!ok) { window.RBF_FAIL(document.getElementById('brochure-ok')); }
+      bf.style.display = 'none'; document.getElementById('brochure-ok').classList.add('on');
+    });
   });
 
   // gallery lightbox
@@ -147,3 +168,8 @@
     lb.addEventListener('click', function(e){ if (e.target === lb) lb.close(); });
   }
 })();
+
+// mobile sticky CTA: show after the first screen
+(function(){var b=document.querySelector('[data-mcta]');if(!b)return;var h=document.querySelector('.hero,.page-hero');
+  if(!h||!('IntersectionObserver' in window)){b.classList.add('show');return}
+  new IntersectionObserver(function(es){es.forEach(function(x){b.classList.toggle('show',!x.isIntersecting)})}).observe(h)})();
