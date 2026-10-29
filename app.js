@@ -7,7 +7,8 @@ window.RBF_SEND = function(form, kind, extra){
   d._cc = FD.cc.join(','); d._template = 'table'; d._captcha = 'false'; d.form = kind; d.page = location.href;
   var em = d.email || d.b_email; if (em) d._replyto = em;
   var ac = window.AbortController ? new AbortController() : null;
-  var req = fetch(FD.endpoint, {method: 'POST', headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}, body: JSON.stringify(d), signal: ac ? ac.signal : undefined})
+  d._site = 'franchise'; var gas = /script\.google\.com/.test(FD.endpoint);
+  var req = fetch(FD.endpoint, {method: 'POST', headers: gas ? {'Content-Type': 'text/plain;charset=utf-8'} : {'Content-Type': 'application/json', 'Accept': 'application/json'}, body: JSON.stringify(d), redirect: 'follow', signal: ac ? ac.signal : undefined})
     .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ return r.ok && String(j.success) === 'true'; }); })
     .catch(function(){ return false; });
   var to = new Promise(function(res){ setTimeout(function(){ if (ac) ac.abort(); res(false); }, 10000); });
